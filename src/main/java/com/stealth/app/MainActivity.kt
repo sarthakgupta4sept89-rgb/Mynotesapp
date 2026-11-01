@@ -352,7 +352,6 @@ class MainActivity : Activity() {
             setOnClickListener { HiddenCallManager.hangup() }
         }
 
-        // --- GENERAL DIALER SECTION ---
         val dialerHeader = TextView(this).apply {
             text = "\n📞 Normal Call Dialer:"
             textSize = 18f
@@ -373,7 +372,6 @@ class MainActivity : Activity() {
             }
         }
 
-        // Keypad grid
         val grid = GridLayout(this).apply {
             columnCount = 3
             alignmentMode = GridLayout.ALIGN_BOUNDS
@@ -453,7 +451,6 @@ class MainActivity : Activity() {
         layout.addView(speakerBtn)
         layout.addView(endBtn)
         
-        // Add Dialer views
         layout.addView(dialerHeader)
         layout.addView(pickContactBtn)
         layout.addView(dialerDisplay)
