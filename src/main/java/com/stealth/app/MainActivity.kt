@@ -14,6 +14,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.CallLog
+import android.provider.ContactsContract
 import android.telecom.Call
 import android.telecom.CallAudioState
 import android.telecom.InCallService
@@ -38,16 +39,12 @@ object HiddenCallManager {
     private const val KEY_MISSED = "missed_calls"
 
     fun setHiddenNumbers(ctx: Context, numbers: String) {
-        // Multiple numbers ko comma ya space se alag karke save karein
         val cleanList = numbers.split(",", " ", "\n")
             .map { it.filter { digit -> digit.isDigit() }.takeLast(10) }
             .filter { it.length == 10 }
             .toSet()
-        
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .putStringSet(KEY_NUMBERS, cleanList)
-            .apply()
+            .edit().putStringSet(KEY_NUMBERS, cleanList).apply()
     }
 
     fun getHiddenNumbers(ctx: Context): String {
@@ -61,7 +58,6 @@ object HiddenCallManager {
         val cleanIn = incoming.filter { it.isDigit() }.takeLast(10)
         val savedSet = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getStringSet(KEY_NUMBERS, emptySet()) ?: emptySet()
-        
         return savedSet.any { it.length == 10 && cleanIn == it }
     }
 
@@ -264,6 +260,8 @@ class NormalCallActivity : Activity() {
 }
 
 class MainActivity : Activity() {
+    private lateinit var dialerDisplay: EditText
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         showDisguiseLockScreen()
@@ -307,37 +305,36 @@ class MainActivity : Activity() {
         val scroll = ScrollView(this)
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(40, 48, 40, 48)
+            setPadding(30, 40, 30, 40)
         }
 
         val header = TextView(this).apply {
-            text = "🔒 Secret Call Vault"
-            textSize = 22f
-            setPadding(0, 0, 0, 24)
+            text = "🔒 Secret Vault & Dialer"
+            textSize = 20f
+            setPadding(0, 0, 0, 16)
         }
 
         val permBtn = Button(this).apply {
-            text = "Step 1: Activate Permissions & Default Dialer"
+            text = "Step 1: Default Dialer Permission"
             setOnClickListener { requestPermissionsAndRole() }
         }
 
         val numberInput = EditText(this).apply {
-            hint = "Numbers likhein (Comma ya space dekar jaise: 9876543210, 9123456789)"
-            minLines = 2
+            hint = "Hidden Numbers (jaise: 9876543210)"
             setText(HiddenCallManager.getHiddenNumbers(this@MainActivity))
         }
 
         val saveBtn = Button(this).apply {
-            text = "Step 2: Save All Hidden Numbers"
+            text = "Step 2: Save Hidden Numbers"
             setOnClickListener {
                 HiddenCallManager.setHiddenNumbers(this@MainActivity, numberInput.text.toString())
-                Toast.makeText(this@MainActivity, "Numbers Saved Successfully!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, "Saved Successfully!", Toast.LENGTH_SHORT).show()
             }
         }
 
         val liveStatus = TextView(this).apply {
-            textSize = 18f
-            setPadding(0, 40, 0, 16)
+            textSize = 16f
+            setPadding(0, 20, 0, 10)
         }
 
         val answerBtn = Button(this).apply {
@@ -355,14 +352,91 @@ class MainActivity : Activity() {
             setOnClickListener { HiddenCallManager.hangup() }
         }
 
+        // --- GENERAL DIALER SECTION ---
+        val dialerHeader = TextView(this).apply {
+            text = "\n📞 Normal Call Dialer:"
+            textSize = 18f
+        }
+
+        dialerDisplay = EditText(this).apply {
+            hint = "Number daalein ya Contact chunein..."
+            textSize = 20f
+            isFocusable = false
+            isClickable = false
+        }
+
+        val pickContactBtn = Button(this).apply {
+            text = "👥 Choose from Contacts"
+            setOnClickListener {
+                val intent = Intent(Intent.ACTION_PICK, ContactsContract.Common.PhoneNumbers.CONTENT_URI)
+                startActivityForResult(intent, 201)
+            }
+        }
+
+        // Keypad grid
+        val grid = GridLayout(this).apply {
+            columnCount = 3
+            alignmentMode = GridLayout.ALIGN_BOUNDS
+        }
+
+        val buttons = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#")
+        for (bText in buttons) {
+            val btn = Button(this).apply {
+                text = bText
+                textSize = 18f
+                setOnClickListener {
+                    dialerDisplay.setText(dialerDisplay.text.toString() + bText)
+                }
+            }
+            val param = GridLayout.LayoutParams().apply {
+                width = 200
+                height = 130
+                setMargins(8, 8, 8, 8)
+            }
+            grid.addView(btn, param)
+        }
+
+        val dialActionLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(0, 16, 0, 20)
+        }
+
+        val callBtn = Button(this).apply {
+            text = "📞 Call"
+            setBackgroundColor(Color.parseColor("#00AA00"))
+            setTextColor(Color.WHITE)
+            setOnClickListener {
+                val num = dialerDisplay.text.toString()
+                if (num.isNotEmpty()) {
+                    startActivity(Intent(Intent.ACTION_CALL, Uri.parse("tel:$num")))
+                } else {
+                    Toast.makeText(this@MainActivity, "Pehle number daalein", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        val clearDialBtn = Button(this).apply {
+            text = "⬅ Del"
+            setOnClickListener {
+                val current = dialerDisplay.text.toString()
+                if (current.isNotEmpty()) {
+                    dialerDisplay.setText(current.dropLast(1))
+                }
+            }
+        }
+
+        dialActionLayout.addView(callBtn)
+        dialActionLayout.addView(clearDialBtn)
+
         val missedTitle = TextView(this).apply {
             text = "\n📋 Private Missed Calls:"
             textSize = 18f
         }
 
         val missedList = TextView(this).apply {
-            textSize = 15f
-            setPadding(0, 12, 0, 20)
+            textSize = 14f
+            setPadding(0, 8, 0, 20)
         }
 
         val clearBtn = Button(this).apply {
@@ -378,6 +452,14 @@ class MainActivity : Activity() {
         layout.addView(answerBtn)
         layout.addView(speakerBtn)
         layout.addView(endBtn)
+        
+        // Add Dialer views
+        layout.addView(dialerHeader)
+        layout.addView(pickContactBtn)
+        layout.addView(dialerDisplay)
+        layout.addView(grid)
+        layout.addView(dialActionLayout)
+
         layout.addView(missedTitle)
         layout.addView(missedList)
         layout.addView(clearBtn)
@@ -416,6 +498,21 @@ class MainActivity : Activity() {
         refreshUI()
     }
 
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 201 && resultCode == RESULT_OK) {
+            data?.data?.let { uri ->
+                val cursor = contentResolver.query(uri, arrayOf(ContactsContract.Common.PhoneNumbers.NUMBER), null, null, null)
+                cursor?.use {
+                    if (it.moveToFirst()) {
+                        val number = it.getString(0)
+                        dialerDisplay.setText(number)
+                    }
+                }
+            }
+        }
+    }
+
     private fun requestPermissionsAndRole() {
         requestPermissions(
             arrayOf(
@@ -423,7 +520,8 @@ class MainActivity : Activity() {
                 Manifest.permission.READ_CALL_LOG,
                 Manifest.permission.WRITE_CALL_LOG,
                 Manifest.permission.CALL_PHONE,
-                Manifest.permission.ANSWER_PHONE_CALLS
+                Manifest.permission.ANSWER_PHONE_CALLS,
+                Manifest.permission.READ_CONTACTS
             ), 101
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
