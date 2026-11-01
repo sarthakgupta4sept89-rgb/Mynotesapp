@@ -34,23 +34,35 @@ object HiddenCallManager {
     var onStateChangedListener: (() -> Unit)? = null
 
     private const val PREFS = "StealthPrefs"
-    private const val KEY_NUMBER = "hidden_number"
+    private const val KEY_NUMBERS = "hidden_numbers"
     private const val KEY_MISSED = "missed_calls"
 
-    fun setHiddenNumber(ctx: Context, number: String) {
-        val clean = number.filter { it.isDigit() }.takeLast(10)
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY_NUMBER, clean).apply()
+    fun setHiddenNumbers(ctx: Context, numbers: String) {
+        // Multiple numbers ko comma ya space se alag karke save karein
+        val cleanList = numbers.split(",", " ", "\n")
+            .map { it.filter { digit -> digit.isDigit() }.takeLast(10) }
+            .filter { it.length == 10 }
+            .toSet()
+        
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putStringSet(KEY_NUMBERS, cleanList)
+            .apply()
     }
 
-    fun getHiddenNumber(ctx: Context): String {
-        return ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_NUMBER, "") ?: ""
+    fun getHiddenNumbers(ctx: Context): String {
+        val set = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getStringSet(KEY_NUMBERS, emptySet()) ?: emptySet()
+        return set.joinToString(", ")
     }
 
     fun isHidden(ctx: Context, incoming: String?): Boolean {
         if (incoming.isNullOrBlank()) return false
         val cleanIn = incoming.filter { it.isDigit() }.takeLast(10)
-        val saved = getHiddenNumber(ctx)
-        return saved.length == 10 && cleanIn == saved
+        val savedSet = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getStringSet(KEY_NUMBERS, emptySet()) ?: emptySet()
+        
+        return savedSet.any { it.length == 10 && cleanIn == it }
     }
 
     fun answer() {
@@ -310,16 +322,16 @@ class MainActivity : Activity() {
         }
 
         val numberInput = EditText(this).apply {
-            hint = "10-Digit Mobile Number daalein"
-            inputType = InputType.TYPE_CLASS_PHONE
-            setText(HiddenCallManager.getHiddenNumber(this@MainActivity))
+            hint = "Numbers likhein (Comma ya space dekar jaise: 9876543210, 9123456789)"
+            minLines = 2
+            setText(HiddenCallManager.getHiddenNumbers(this@MainActivity))
         }
 
         val saveBtn = Button(this).apply {
-            text = "Step 2: Save Hidden Number"
+            text = "Step 2: Save All Hidden Numbers"
             setOnClickListener {
-                HiddenCallManager.setHiddenNumber(this@MainActivity, numberInput.text.toString())
-                Toast.makeText(this@MainActivity, "Secret Number Saved!", Toast.LENGTH_SHORT).show()
+                HiddenCallManager.setHiddenNumbers(this@MainActivity, numberInput.text.toString())
+                Toast.makeText(this@MainActivity, "Numbers Saved Successfully!", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -341,18 +353,6 @@ class MainActivity : Activity() {
         val endBtn = Button(this).apply {
             text = "🔴 Cut / Reject Call"
             setOnClickListener { HiddenCallManager.hangup() }
-        }
-
-        val callOutBtn = Button(this).apply {
-            text = "📞 Call Hidden Contact Now"
-            setOnClickListener {
-                val num = HiddenCallManager.getHiddenNumber(this@MainActivity)
-                if (num.length == 10) {
-                    startActivity(Intent(Intent.ACTION_CALL, Uri.parse("tel:$num")))
-                } else {
-                    Toast.makeText(this@MainActivity, "Pehle 10-digit number save karein", Toast.LENGTH_SHORT).show()
-                }
-            }
         }
 
         val missedTitle = TextView(this).apply {
@@ -378,7 +378,6 @@ class MainActivity : Activity() {
         layout.addView(answerBtn)
         layout.addView(speakerBtn)
         layout.addView(endBtn)
-        layout.addView(callOutBtn)
         layout.addView(missedTitle)
         layout.addView(missedList)
         layout.addView(clearBtn)
