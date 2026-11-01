@@ -14,7 +14,6 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.CallLog
-import android.provider.ContactsContract
 import android.telecom.Call
 import android.telecom.CallAudioState
 import android.telecom.InCallService
@@ -358,18 +357,10 @@ class MainActivity : Activity() {
         }
 
         dialerDisplay = EditText(this).apply {
-            hint = "Number daalein ya Contact chunein..."
+            hint = "Number daalein..."
             textSize = 20f
             isFocusable = false
             isClickable = false
-        }
-
-        val pickContactBtn = Button(this).apply {
-            text = "👥 Choose from Contacts"
-            setOnClickListener {
-                val intent = Intent(Intent.ACTION_PICK, ContactsContract.Common.PhoneNumbers.CONTENT_URI)
-                startActivityForResult(intent, 201)
-            }
         }
 
         val grid = GridLayout(this).apply {
@@ -452,7 +443,6 @@ class MainActivity : Activity() {
         layout.addView(endBtn)
         
         layout.addView(dialerHeader)
-        layout.addView(pickContactBtn)
         layout.addView(dialerDisplay)
         layout.addView(grid)
         layout.addView(dialActionLayout)
@@ -495,21 +485,6 @@ class MainActivity : Activity() {
         refreshUI()
     }
 
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == 201 && resultCode == RESULT_OK) {
-            data?.data?.let { uri ->
-                val cursor = contentResolver.query(uri, arrayOf(ContactsContract.Common.PhoneNumbers.NUMBER), null, null, null)
-                cursor?.use {
-                    if (it.moveToFirst()) {
-                        val number = it.getString(0)
-                        dialerDisplay.setText(number)
-                    }
-                }
-            }
-        }
-    }
-
     private fun requestPermissionsAndRole() {
         requestPermissions(
             arrayOf(
@@ -517,8 +492,7 @@ class MainActivity : Activity() {
                 Manifest.permission.READ_CALL_LOG,
                 Manifest.permission.WRITE_CALL_LOG,
                 Manifest.permission.CALL_PHONE,
-                Manifest.permission.ANSWER_PHONE_CALLS,
-                Manifest.permission.READ_CONTACTS
+                Manifest.permission.ANSWER_PHONE_CALLS
             ), 101
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
