@@ -94,7 +94,7 @@ object HiddenCallManager {
     }
 
     fun logIncomingCall(ctx: Context, number: String, isHiddenCall: Boolean) {
-        if (isHiddenCall) return // Hidden call ko normal incoming list se alag rakhein
+        if (isHiddenCall) return
         val time = SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault()).format(Date())
         val name = getContactName(ctx, number)
         val display = if (!name.isNullOrBlank()) "$name ($number)" else number
@@ -359,7 +359,6 @@ class MainActivity : Activity() {
             setPadding(0, 0, 0, 16)
         }
 
-        // Top Navigation Bar: Contacts | Recent Calls | Settings
         val topNavLayout = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
@@ -386,7 +385,6 @@ class MainActivity : Activity() {
         topNavLayout.addView(recentCallsBtn)
         topNavLayout.addView(settingsBtn)
 
-        // --- 1. RECENT INCOMING CALLS TAB (Hidden by default) ---
         val incomingLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             visibility = View.GONE
@@ -417,7 +415,6 @@ class MainActivity : Activity() {
         incomingLayout.addView(incomingList)
         incomingLayout.addView(clearIncomingBtn)
 
-        // --- 2. SECRET SETTINGS TAB (Completely Hidden inside ⚙️ Settings) ---
         val settingsContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             visibility = View.GONE
@@ -480,7 +477,6 @@ class MainActivity : Activity() {
         settingsContainer.addView(missedList)
         settingsContainer.addView(clearBtn)
 
-        // Toggle actions for Recent Calls and Settings tabs
         recentCallsBtn.setOnClickListener {
             settingsContainer.visibility = View.GONE
             incomingLayout.visibility = if (incomingLayout.visibility == View.VISIBLE) View.GONE else View.VISIBLE
@@ -492,7 +488,6 @@ class MainActivity : Activity() {
             settingsContainer.visibility = if (settingsContainer.visibility == View.VISIBLE) View.GONE else View.VISIBLE
         }
 
-        // --- 3. LIVE SILENT CALL BANNER (Only visible when an active call is happening!) ---
         val liveCallBox = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             visibility = View.GONE
@@ -525,7 +520,6 @@ class MainActivity : Activity() {
         liveCallBox.addView(speakerBtn)
         liveCallBox.addView(endBtn)
 
-        // --- 4. MAIN DIALPAD ---
         dialerDisplay = EditText(this).apply {
             hint = "Number daalein ya Contacts chunein..."
             textSize = 20f
@@ -535,7 +529,6 @@ class MainActivity : Activity() {
         val grid = GridLayout(this).apply {
             columnCount = 3
             alignmentMode = GridLayout.ALIGN_BOUNDS
-            gravity = Gravity.CENTER
         }
 
         val buttons = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#")
