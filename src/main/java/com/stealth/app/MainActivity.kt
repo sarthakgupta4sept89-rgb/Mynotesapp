@@ -62,7 +62,6 @@ object HiddenCallManager {
         return savedSet.any { it.length == 10 && cleanIn == it }
     }
 
-    // Non-hidden contact ka naam phonebook se nikalne ke liye
     fun getContactName(ctx: Context, phoneNumber: String?): String? {
         if (phoneNumber.isNullOrBlank()) return null
         return try {
@@ -72,9 +71,7 @@ object HiddenCallManager {
             )
             val projection = arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME)
             ctx.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    cursor.getString(0)
-                } else null
+                if (cursor.moveToFirst()) cursor.getString(0) else null
             }
         } catch (_: Exception) {
             null
@@ -97,17 +94,13 @@ object HiddenCallManager {
     }
 
     fun logIncomingCall(ctx: Context, number: String, isHiddenCall: Boolean) {
+        if (isHiddenCall) return // Hidden call ko normal incoming list se alag rakhein
         val time = SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault()).format(Date())
-        val tag = if (isHiddenCall) "[🔒 Hidden]" else "[📞 Normal]"
-        val display = if (isHiddenCall) {
-            number
-        } else {
-            val name = getContactName(ctx, number)
-            if (!name.isNullOrBlank()) "$name ($number)" else number
-        }
+        val name = getContactName(ctx, number)
+        val display = if (!name.isNullOrBlank()) "$name ($number)" else number
         val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val old = prefs.getString(KEY_ALL_INCOMING, "") ?: ""
-        val updated = "$tag $display - $time\n$old"
+        val updated = "📞 $display - $time\n$old"
         prefs.edit().putString(KEY_ALL_INCOMING, updated).apply()
     }
 
@@ -125,13 +118,13 @@ object HiddenCallManager {
         val time = SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault()).format(Date())
         val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val old = prefs.getString(KEY_MISSED, "") ?: ""
-        val updated = "• Missed Call ($number) - $time\n$old"
+        val updated = "• $number - $time\n$old"
         prefs.edit().putString(KEY_MISSED, updated).apply()
     }
 
     fun getMissedCalls(ctx: Context): String {
         val logs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_MISSED, "") ?: ""
-        return if (logs.isBlank()) "Koi Missed Call nahi hai." else logs
+        return if (logs.isBlank()) "Koi record nahi hai." else logs
     }
 
     fun clearMissedCalls(ctx: Context) {
@@ -312,6 +305,7 @@ class NormalCallActivity : Activity() {
 
 class MainActivity : Activity() {
     private lateinit var dialerDisplay: EditText
+    private lateinit var numberInput: EditText
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -339,7 +333,7 @@ class MainActivity : Activity() {
             text = "Save Note"
             setOnClickListener {
                 if (noteBox.text.toString().trim() == "1234") {
-                    showSecretVault()
+                    showMainDialerScreen()
                 } else {
                     Toast.makeText(this@MainActivity, "Note Saved!", Toast.LENGTH_SHORT).show()
                 }
@@ -352,7 +346,7 @@ class MainActivity : Activity() {
         setContentView(layout)
     }
 
-    private fun showSecretVault() {
+    private fun showMainDialerScreen() {
         val scroll = ScrollView(this)
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -360,64 +354,59 @@ class MainActivity : Activity() {
         }
 
         val header = TextView(this).apply {
-            text = "📞 Dialer & Notes Utility"
-            textSize = 20f
+            text = "📞 Phone Dialer"
+            textSize = 22f
             setPadding(0, 0, 0, 16)
         }
 
-        val permBtn = Button(this).apply {
-            text = "Step 1: Default Dialer & Contacts Permission"
-            setOnClickListener { requestPermissionsAndRole() }
+        // Top Navigation Bar: Contacts | Recent Calls | Settings
+        val topNavLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, 16)
         }
 
-        val hiddenSectionLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            visibility = View.GONE
-            setPadding(0, 10, 0, 16)
-        }
-
-        val numberInput = EditText(this).apply {
-            hint = "Hidden Numbers (jaise: 9876543210)"
-            setText(HiddenCallManager.getHiddenNumbers(this@MainActivity))
-        }
-
-        val saveBtn = Button(this).apply {
-            text = "Save Hidden Numbers"
+        val pickContactBtn = Button(this).apply {
+            text = "👥 Contacts"
             setOnClickListener {
-                HiddenCallManager.setHiddenNumbers(this@MainActivity, numberInput.text.toString())
-                Toast.makeText(this@MainActivity, "Saved Successfully!", Toast.LENGTH_SHORT).show()
+                val intent = Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI)
+                startActivityForResult(intent, 201)
             }
         }
 
-        hiddenSectionLayout.addView(numberInput)
-        hiddenSectionLayout.addView(saveBtn)
-
-        val archiveSettingsBtn = Button(this).apply {
-            text = "📁 Archive Settings"
-            setOnClickListener {
-                hiddenSectionLayout.visibility = if (hiddenSectionLayout.visibility == View.VISIBLE) View.GONE else View.VISIBLE
-            }
+        val recentCallsBtn = Button(this).apply {
+            text = "📥 Call Log"
         }
 
+        val settingsBtn = Button(this).apply {
+            text = "⚙️ Settings"
+        }
+
+        topNavLayout.addView(pickContactBtn)
+        topNavLayout.addView(recentCallsBtn)
+        topNavLayout.addView(settingsBtn)
+
+        // --- 1. RECENT INCOMING CALLS TAB (Hidden by default) ---
         val incomingLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             visibility = View.GONE
-            setPadding(0, 10, 0, 16)
+            setPadding(16, 16, 16, 16)
+            setBackgroundColor(Color.parseColor("#F2F2F2"))
         }
 
         val incomingTitle = TextView(this).apply {
-            text = "📋 All Incoming Calls History:"
+            text = "📋 Recent Incoming Calls:"
             textSize = 16f
         }
 
         val incomingList = TextView(this).apply {
-            textSize = 13f
+            textSize = 14f
             setPadding(0, 8, 0, 12)
             text = HiddenCallManager.getAllIncomingCalls(this@MainActivity)
         }
 
         val clearIncomingBtn = Button(this).apply {
-            text = "Clear History"
+            text = "Clear Call Log"
             setOnClickListener {
                 HiddenCallManager.clearAllIncoming(this@MainActivity)
                 incomingList.text = HiddenCallManager.getAllIncomingCalls(this@MainActivity)
@@ -428,21 +417,96 @@ class MainActivity : Activity() {
         incomingLayout.addView(incomingList)
         incomingLayout.addView(clearIncomingBtn)
 
-        val allCallsToggleBtn = Button(this).apply {
-            text = "📥 View Incoming Calls Log"
+        // --- 2. SECRET SETTINGS TAB (Completely Hidden inside ⚙️ Settings) ---
+        val settingsContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.GONE
+            setPadding(20, 20, 20, 20)
+            setBackgroundColor(Color.parseColor("#EFEFEF"))
+        }
+
+        val permBtn = Button(this).apply {
+            text = "Step 1: Enable Default Dialer & Permissions"
+            setOnClickListener { requestPermissionsAndRole() }
+        }
+
+        val hiddenLabel = TextView(this).apply {
+            text = "\n🔒 Hidden Contacts List:"
+            textSize = 16f
+        }
+
+        val pickHiddenContactBtn = Button(this).apply {
+            text = "➕ Select from Contacts to Hide"
             setOnClickListener {
-                incomingLayout.visibility = if (incomingLayout.visibility == View.VISIBLE) View.GONE else View.VISIBLE
-                incomingList.text = HiddenCallManager.getAllIncomingCalls(this@MainActivity)
+                val intent = Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI)
+                startActivityForResult(intent, 202)
             }
+        }
+
+        numberInput = EditText(this).apply {
+            hint = "Numbers (comma se alag karein: 9876543210)"
+            setText(HiddenCallManager.getHiddenNumbers(this@MainActivity))
+        }
+
+        val saveBtn = Button(this).apply {
+            text = "Save Hidden Numbers"
+            setOnClickListener {
+                HiddenCallManager.setHiddenNumbers(this@MainActivity, numberInput.text.toString())
+                Toast.makeText(this@MainActivity, "Settings Saved!", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        val missedTitle = TextView(this).apply {
+            text = "\n📋 Private Missed Logs:"
+            textSize = 16f
+        }
+
+        val missedList = TextView(this).apply {
+            textSize = 14f
+            setPadding(0, 8, 0, 12)
+        }
+
+        val clearBtn = Button(this).apply {
+            text = "Clear Private Logs"
+            setOnClickListener { HiddenCallManager.clearMissedCalls(this@MainActivity) }
+        }
+
+        settingsContainer.addView(permBtn)
+        settingsContainer.addView(hiddenLabel)
+        settingsContainer.addView(pickHiddenContactBtn)
+        settingsContainer.addView(numberInput)
+        settingsContainer.addView(saveBtn)
+        settingsContainer.addView(missedTitle)
+        settingsContainer.addView(missedList)
+        settingsContainer.addView(clearBtn)
+
+        // Toggle actions for Recent Calls and Settings tabs
+        recentCallsBtn.setOnClickListener {
+            settingsContainer.visibility = View.GONE
+            incomingLayout.visibility = if (incomingLayout.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+            incomingList.text = HiddenCallManager.getAllIncomingCalls(this@MainActivity)
+        }
+
+        settingsBtn.setOnClickListener {
+            incomingLayout.visibility = View.GONE
+            settingsContainer.visibility = if (settingsContainer.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+        }
+
+        // --- 3. LIVE SILENT CALL BANNER (Only visible when an active call is happening!) ---
+        val liveCallBox = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.GONE
+            setPadding(20, 20, 20, 20)
+            setBackgroundColor(Color.parseColor("#FFE8E8"))
         }
 
         val liveStatus = TextView(this).apply {
             textSize = 16f
-            setPadding(0, 20, 0, 10)
+            setPadding(0, 0, 0, 10)
         }
 
         val answerBtn = Button(this).apply {
-            text = "🟢 Answer Silent Call"
+            text = "🟢 Answer Call"
             setOnClickListener { HiddenCallManager.answer() }
         }
 
@@ -456,21 +520,22 @@ class MainActivity : Activity() {
             setOnClickListener { HiddenCallManager.hangup() }
         }
 
-        val dialerHeader = TextView(this).apply {
-            text = "\n📞 Dialpad:"
-            textSize = 18f
-        }
+        liveCallBox.addView(liveStatus)
+        liveCallBox.addView(answerBtn)
+        liveCallBox.addView(speakerBtn)
+        liveCallBox.addView(endBtn)
 
+        // --- 4. MAIN DIALPAD ---
         dialerDisplay = EditText(this).apply {
-            hint = "Number daalein..."
+            hint = "Number daalein ya Contacts chunein..."
             textSize = 20f
-            isFocusable = false
-            isClickable = false
+            setPadding(0, 20, 0, 16)
         }
 
         val grid = GridLayout(this).apply {
             columnCount = 3
             alignmentMode = GridLayout.ALIGN_BOUNDS
+            gravity = Gravity.CENTER
         }
 
         val buttons = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#")
@@ -483,8 +548,8 @@ class MainActivity : Activity() {
                 }
             }
             val param = GridLayout.LayoutParams().apply {
-                width = 200
-                height = 130
+                width = 210
+                height = 135
                 setMargins(8, 8, 8, 8)
             }
             grid.addView(btn, param)
@@ -501,7 +566,7 @@ class MainActivity : Activity() {
             setBackgroundColor(Color.parseColor("#00AA00"))
             setTextColor(Color.WHITE)
             setOnClickListener {
-                val num = dialerDisplay.text.toString()
+                val num = dialerDisplay.text.toString().trim()
                 if (num.isNotEmpty()) {
                     startActivity(Intent(Intent.ACTION_CALL, Uri.parse("tel:$num")))
                 } else {
@@ -523,41 +588,15 @@ class MainActivity : Activity() {
         dialActionLayout.addView(callBtn)
         dialActionLayout.addView(clearDialBtn)
 
-        val missedTitle = TextView(this).apply {
-            text = "\n📋 Private Missed Calls:"
-            textSize = 18f
-        }
-
-        val missedList = TextView(this).apply {
-            textSize = 14f
-            setPadding(0, 8, 0, 20)
-        }
-
-        val clearBtn = Button(this).apply {
-            text = "Clear Missed Call History"
-            setOnClickListener { HiddenCallManager.clearMissedCalls(this@MainActivity) }
-        }
-
         layout.addView(header)
-        layout.addView(permBtn)
-        layout.addView(archiveSettingsBtn)
-        layout.addView(hiddenSectionLayout)
-        layout.addView(allCallsToggleBtn)
+        layout.addView(topNavLayout)
         layout.addView(incomingLayout)
-
-        layout.addView(liveStatus)
-        layout.addView(answerBtn)
-        layout.addView(speakerBtn)
-        layout.addView(endBtn)
-
-        layout.addView(dialerHeader)
+        layout.addView(settingsContainer)
+        layout.addView(liveCallBox)
         layout.addView(dialerDisplay)
         layout.addView(grid)
         layout.addView(dialActionLayout)
 
-        layout.addView(missedTitle)
-        layout.addView(missedList)
-        layout.addView(clearBtn)
         scroll.addView(layout)
         setContentView(scroll)
 
@@ -565,25 +604,19 @@ class MainActivity : Activity() {
             val call = HiddenCallManager.activeCall
             when (call?.state) {
                 Call.STATE_RINGING -> {
-                    liveStatus.text = "🔴 SECRET CONTACT CALLING SILENTLY!"
+                    liveCallBox.visibility = View.VISIBLE
+                    liveStatus.text = "🔴 INCOMING SILENT CALL..."
                     liveStatus.setTextColor(Color.RED)
-                    answerBtn.isEnabled = true
-                    endBtn.isEnabled = true
-                    speakerBtn.isEnabled = true
+                    answerBtn.visibility = View.VISIBLE
                 }
                 Call.STATE_ACTIVE, Call.STATE_DIALING -> {
+                    liveCallBox.visibility = View.VISIBLE
                     liveStatus.text = "🟢 Call Connected (Speaker: ${if (HiddenCallManager.isSpeakerOn) "ON" else "OFF"})"
                     liveStatus.setTextColor(Color.parseColor("#007F00"))
-                    answerBtn.isEnabled = false
-                    endBtn.isEnabled = true
-                    speakerBtn.isEnabled = true
+                    answerBtn.visibility = View.GONE
                 }
                 else -> {
-                    liveStatus.text = "Status: No Active Secret Call"
-                    liveStatus.setTextColor(Color.DKGRAY)
-                    answerBtn.isEnabled = false
-                    endBtn.isEnabled = false
-                    speakerBtn.isEnabled = false
+                    liveCallBox.visibility = View.GONE
                 }
             }
             missedList.text = HiddenCallManager.getMissedCalls(this)
@@ -592,6 +625,35 @@ class MainActivity : Activity() {
 
         HiddenCallManager.onStateChangedListener = refreshUI
         refreshUI()
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (resultCode == RESULT_OK && data?.data != null) {
+            val uri = data.data!!
+            val projection = arrayOf(
+                ContactsContract.CommonDataKinds.Phone.NUMBER,
+                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME
+            )
+            contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val number = cursor.getString(0) ?: ""
+                    val name = cursor.getString(1) ?: ""
+                    if (requestCode == 201) {
+                        val cleanDial = number.filter { it.isDigit() || it == '+' }
+                        dialerDisplay.setText(cleanDial)
+                        Toast.makeText(this, "Contact: $name", Toast.LENGTH_SHORT).show()
+                    } else if (requestCode == 202) {
+                        val clean10 = number.filter { it.isDigit() }.takeLast(10)
+                        val current = numberInput.text.toString().trim()
+                        val updated = if (current.isEmpty()) clean10 else "$current, $clean10"
+                        numberInput.setText(updated)
+                        HiddenCallManager.setHiddenNumbers(this, updated)
+                        Toast.makeText(this, "$name ($clean10) Hidden List mein jud gaya!", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
     }
 
     private fun requestPermissionsAndRole() {
