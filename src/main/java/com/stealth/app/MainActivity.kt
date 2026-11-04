@@ -14,12 +14,12 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.CallLog
+import android.provider.ContactsContract
 import android.telecom.Call
 import android.telecom.CallAudioState
 import android.telecom.InCallService
 import android.telecom.TelecomManager
 import android.telecom.VideoProfile
-import android.text.InputType
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
@@ -62,6 +62,25 @@ object HiddenCallManager {
         return savedSet.any { it.length == 10 && cleanIn == it }
     }
 
+    // Non-hidden contact ka naam phonebook se nikalne ke liye
+    fun getContactName(ctx: Context, phoneNumber: String?): String? {
+        if (phoneNumber.isNullOrBlank()) return null
+        return try {
+            val uri = Uri.withAppendedPath(
+                ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
+                Uri.encode(phoneNumber)
+            )
+            val projection = arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME)
+            ctx.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    cursor.getString(0)
+                } else null
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     fun answer() {
         activeCall?.answer(VideoProfile.STATE_AUDIO_ONLY)
     }
@@ -80,9 +99,15 @@ object HiddenCallManager {
     fun logIncomingCall(ctx: Context, number: String, isHiddenCall: Boolean) {
         val time = SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault()).format(Date())
         val tag = if (isHiddenCall) "[🔒 Hidden]" else "[📞 Normal]"
+        val display = if (isHiddenCall) {
+            number
+        } else {
+            val name = getContactName(ctx, number)
+            if (!name.isNullOrBlank()) "$name ($number)" else number
+        }
         val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val old = prefs.getString(KEY_ALL_INCOMING, "") ?: ""
-        val updated = "$tag $number - $time\n$old"
+        val updated = "$tag $display - $time\n$old"
         prefs.edit().putString(KEY_ALL_INCOMING, updated).apply()
     }
 
@@ -160,7 +185,6 @@ class StealthInCallService : InCallService() {
         val incomingNum = call.details.handle?.schemeSpecificPart ?: "Unknown"
         val isHidden = HiddenCallManager.isHidden(applicationContext, incomingNum)
 
-        // Saari incoming calls yahan log hongi
         HiddenCallManager.logIncomingCall(applicationContext, incomingNum, isHidden)
 
         if (isHidden) {
@@ -273,8 +297,10 @@ class NormalCallActivity : Activity() {
                 finish()
             } else {
                 val num = call.details.handle?.schemeSpecificPart ?: "Unknown"
+                val contactName = HiddenCallManager.getContactName(this@NormalCallActivity, num)
                 val status = if (call.state == Call.STATE_RINGING) "Incoming Call..." else "Connected"
-                callerText.text = "$status\n\n$num"
+                val callerInfo = if (!contactName.isNullOrBlank()) "$contactName\n($num)" else num
+                callerText.text = "$status\n\n$callerInfo"
                 answerBtn.visibility = if (call.state == Call.STATE_RINGING) View.VISIBLE else View.GONE
             }
         }
@@ -340,11 +366,10 @@ class MainActivity : Activity() {
         }
 
         val permBtn = Button(this).apply {
-            text = "Step 1: Default Dialer Permission"
+            text = "Step 1: Default Dialer & Contacts Permission"
             setOnClickListener { requestPermissionsAndRole() }
         }
 
-        // --- HIDDEN SECTION ---
         val hiddenSectionLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             visibility = View.GONE
@@ -374,7 +399,6 @@ class MainActivity : Activity() {
             }
         }
 
-        // --- ALL INCOMING CALLS SECTION ---
         val incomingLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             visibility = View.GONE
@@ -518,14 +542,14 @@ class MainActivity : Activity() {
         layout.addView(permBtn)
         layout.addView(archiveSettingsBtn)
         layout.addView(hiddenSectionLayout)
-        layout.addView(allCallsToggleBtn) // Incoming calls tab toggle button
-        layout.addView(incomingLayout) // Incoming calls container
-        
+        layout.addView(allCallsToggleBtn)
+        layout.addView(incomingLayout)
+
         layout.addView(liveStatus)
         layout.addView(answerBtn)
         layout.addView(speakerBtn)
         layout.addView(endBtn)
-        
+
         layout.addView(dialerHeader)
         layout.addView(dialerDisplay)
         layout.addView(grid)
@@ -577,7 +601,8 @@ class MainActivity : Activity() {
                 Manifest.permission.READ_CALL_LOG,
                 Manifest.permission.WRITE_CALL_LOG,
                 Manifest.permission.CALL_PHONE,
-                Manifest.permission.ANSWER_PHONE_CALLS
+                Manifest.permission.ANSWER_PHONE_CALLS,
+                Manifest.permission.READ_CONTACTS
             ), 101
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
