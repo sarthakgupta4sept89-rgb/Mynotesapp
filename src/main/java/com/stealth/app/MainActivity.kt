@@ -189,11 +189,16 @@ class StealthInCallService : InCallService() {
         } else {
             if (call.state == Call.STATE_RINGING) {
                 playNormalRingtone()
+                val intent = Intent(this, NormalCallActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                }
+                startActivity(intent)
+            } else if (call.state == Call.STATE_DIALING || call.state == Call.STATE_ACTIVE) {
+                val intent = Intent(this, NormalCallActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                }
+                startActivity(intent)
             }
-            val intent = Intent(this, NormalCallActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            }
-            startActivity(intent)
         }
     }
 
@@ -270,7 +275,7 @@ class NormalCallActivity : Activity() {
         }
 
         val endBtn = Button(this).apply {
-            text = "🔴 Cut Call"
+            text = "🔴 Cut / End Call"
             textSize = 18f
             setOnClickListener {
                 HiddenCallManager.hangup()
@@ -291,10 +296,26 @@ class NormalCallActivity : Activity() {
             } else {
                 val num = call.details.handle?.schemeSpecificPart ?: "Unknown"
                 val contactName = HiddenCallManager.getContactName(this@NormalCallActivity, num)
-                val status = if (call.state == Call.STATE_RINGING) "Incoming Call..." else "Connected"
                 val callerInfo = if (!contactName.isNullOrBlank()) "$contactName\n($num)" else num
-                callerText.text = "$status\n\n$callerInfo"
-                answerBtn.visibility = if (call.state == Call.STATE_RINGING) View.VISIBLE else View.GONE
+                
+                when (call.state) {
+                    Call.STATE_RINGING -> {
+                        callerText.text = "Incoming Call...\n\n$callerInfo"
+                        answerBtn.visibility = View.VISIBLE
+                    }
+                    Call.STATE_DIALING -> {
+                        callerText.text = "Calling...\n\n$callerInfo"
+                        answerBtn.visibility = View.GONE
+                    }
+                    Call.STATE_ACTIVE -> {
+                        callerText.text = "Call Connected\n\n$callerInfo\n(Speaker: ${if (HiddenCallManager.isSpeakerOn) "ON" else "OFF"})"
+                        answerBtn.visibility = View.GONE
+                    }
+                    else -> {
+                        callerText.text = "Status: Connected\n\n$callerInfo"
+                        answerBtn.visibility = View.GONE
+                    }
+                }
             }
         }
 
@@ -334,6 +355,7 @@ class MainActivity : Activity() {
             setOnClickListener {
                 if (noteBox.text.toString().trim() == "1234") {
                     showMainDialerScreen()
+                    checkAndPromptDefaultDialer()
                 } else {
                     Toast.makeText(this@MainActivity, "Note Saved!", Toast.LENGTH_SHORT).show()
                 }
@@ -344,6 +366,35 @@ class MainActivity : Activity() {
         layout.addView(noteBox)
         layout.addView(unlockBtn)
         setContentView(layout)
+    }
+
+    private fun checkAndPromptDefaultDialer() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val rm = getSystemService(RoleManager::class.java)
+            if (rm != null && !rm.isRoleHeld(RoleManager.ROLE_DIALER)) {
+                showDefaultPromptIntent()
+            }
+        } else {
+            val tm = getSystemService(Context.TELECOM_SERVICE) as TelecomManager
+            if (tm.defaultDialerPackage != packageName) {
+                showDefaultPromptIntent()
+            }
+        }
+    }
+
+    private fun showDefaultPromptIntent() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val rm = getSystemService(RoleManager::class.java)
+                val intent = rm?.createRequestRoleIntent(RoleManager.ROLE_DIALER)
+                if (intent != null) startActivityForResult(intent, 102)
+            } else {
+                val intent = Intent(TelecomManager.ACTION_CHANGE_DEFAULT_DIALER).apply {
+                    putExtra(TelecomManager.EXTRA_CHANGE_DEFAULT_DIALER_PACKAGE_NAME, packageName)
+                }
+                startActivityForResult(intent, 102)
+            }
+        } catch (_: Exception) {}
     }
 
     private fun showMainDialerScreen() {
@@ -604,7 +655,8 @@ class MainActivity : Activity() {
                 }
                 Call.STATE_ACTIVE, Call.STATE_DIALING -> {
                     liveCallBox.visibility = View.VISIBLE
-                    liveStatus.text = "🟢 Call Connected (Speaker: ${if (HiddenCallManager.isSpeakerOn) "ON" else "OFF"})"
+                    val stateText = if (call.state == Call.STATE_DIALING) "Dialing..." else "Connected"
+                    liveStatus.text = "🟢 Call $stateText (Speaker: ${if (HiddenCallManager.isSpeakerOn) "ON" else "OFF"})"
                     liveStatus.setTextColor(Color.parseColor("#007F00"))
                     answerBtn.visibility = View.GONE
                 }
