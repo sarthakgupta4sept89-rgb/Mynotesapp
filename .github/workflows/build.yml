@@ -1,4 +1,4 @@
-name: Auto Build Calculator Vault APK
+name: Build Calculator Vault APK
 
 on:
   push:
@@ -15,15 +15,10 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: '8.2'
-
-      - name: Generate Project & Build APK
+      - name: Create Android Project Files
         shell: python
         run: |
-          import os, shutil, base64
+          import os, shutil
 
           for p in os.listdir('.'):
               if p != '.github':
@@ -34,18 +29,47 @@ jobs:
 
           open("gradle.properties", "w").write("android.useAndroidX=true\norg.gradle.jvmargs=-Xmx2048m\n")
           open("settings.gradle", "w").write('rootProject.name = "Calculator"\ninclude ":app"\n')
-          open("build.gradle", "w").write('buildscript { repositories { google(); mavenCentral() }; dependencies { classpath "com.android.tools.build:gradle:8.1.0" } }\nallprojects { repositories { google(); mavenCentral() } }\n')
-          open("app/build.gradle", "w").write('plugins { id "com.android.application" }\nandroid { namespace "com.example.onetaphide"; compileSdk 34; defaultConfig { applicationId "com.example.onetaphide"; minSdk 26; targetSdk 34; versionCode 1; versionName "1.0" }; compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 } }\ndependencies { implementation "androidx.appcompat:appcompat:1.6.1" }\n')
-
-          manifest_b64 = "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPG1hbmlmZXN0IHhtbG5zOmFuZHJvaWQ9Imh0dHA6Ly9zY2hlbWFzLmFuZHJvaWQuY29tL2Fwai9yZXMvYW5kcm9pZCI+CiAgICA8dXNlcy1wZXJtaXNzaW9uIGFuZHJvaWQ6bmFtZT0iYW5kcm9pZC5wZXJtaXNzaW9uLlJFQURfRVhURVJOQUxfU1RPUkFHRSIgLz4KICAgIDx1c2VzLXBlcm1pc3Npb24gYW5kcm9pZDpuYW1lPSJhbmRyb2lkLnBlcm1pc3Npb24uV1JJVEVfRVhURVJOQUxfU1RPUkFHRSIgLz4KICAgIDx1c2VzLXBlcm1pc3Npb24gYW5kcm9pZDpuYW1lPSJhbmRyb2lkLnBlcm1pc3Npb24uTUFOQUdFX0VYVEVSTkFMX1NUT1JBR0UiIC8+CiAgICA8YXBwbGljYXRpb24KICAgICAgICBhbmRyb2lkOmFsbG93QmFja3VwPSJ0cnVlIgogICAgICAgIGFuZHJvaWQ6bGFiZWw9IkNhbGN1bGF0b3IiCiAgICAgICAgYW5kcm9pZDp0aGVtZT0iQHN0eWxlL1RoZW1lLkFwcENvbXBhdC5Ob0FjdGlvbkJhciIKICAgICAgICBhbmRyb2lkOnJlcXVlc3RMZWdhY3lFeHRlcm5hbFN0b3JhZ2U9InRydWUiPgogICAgICAgIDxhY3Rpdml0eQogICAgICAgICAgICBhbmRyb2lkOm5hbWU9Ii5NYWluQWN0aXZpdHkiCiAgICAgICAgICAgIGFuZHJvaWQ6ZXhwb3J0ZWQ9InRydWUiPgogICAgICAgICAgICA8aW50ZW50LWZpbHRlcj4KICAgICAgICAgICAgICAgIDxhY3Rpb24gYW5kcm9pZDpuYW1lPSJhbmRyb2lkLm intentLmFjdGlvbi5NQUlOIiAvPgogICAgICAgICAgICAgICAgPGFDdGVnb3J5IGFuZHJvaWQ6bmFtZT0iYW5kcm9pZC5pbnRlbnQuY2F0ZWdvcnkuTEFVTkNIRVIiIC8+CiAgICAgICAgICAgIDwvaW50ZW50LWZpbHRlcj4KICAgICAgICA8L2FjdGl2aXR5PgogICAgPC9hcHBsaWNhdGlvbj4KPC9tYW5pZmVzdD4="
           
-          # Write clean manifest directly
+          open("build.gradle", "w").write('''buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.1.0' }
+          }
+          allprojects {
+              repositories { google(); mavenCentral() }
+          }
+          ''')
+
+          open("app/build.gradle", "w").write('''plugins { id 'com.android.application' }
+          android {
+              namespace 'com.example.onetaphide'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.example.onetaphide"
+                  minSdk 26
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+          }
+          ''')
+
           open("app/src/main/AndroidManifest.xml", "w").write('''<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
               <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
               <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
-              <application android:allowBackup="true" android:label="Calculator" android:theme="@style/Theme.AppCompat.NoActionBar" android:requestLegacyExternalStorage="true">
+              <application
+                  android:allowBackup="true"
+                  android:label="Calculator"
+                  android:theme="@style/Theme.AppCompat.NoActionBar"
+                  android:requestLegacyExternalStorage="true">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -53,9 +77,11 @@ jobs:
                       </intent-filter>
                   </activity>
               </application>
-          </manifest>''')
+          </manifest>
+          ''')
 
-          java_code = """package com.example.onetaphide;
+          open("app/src/main/java/com/example/onetaphide/MainActivity.java", "w").write('''package com.example.onetaphide;
+
           import android.app.Activity;
           import android.content.ClipData;
           import android.content.Intent;
@@ -84,6 +110,8 @@ jobs:
           import java.io.IOException;
           import java.io.InputStream;
           import java.io.OutputStream;
+          import java.util.ArrayList;
+          import java.util.List;
 
           public class MainActivity extends AppCompatActivity {
               private static final String SECRET_PIN = "1234";
@@ -93,13 +121,6 @@ jobs:
               private double firstOperand = 0;
               private boolean startNewNumber = true;
               private LinearLayout vaultListContainer;
-
-              private final String[] targetFolders = {
-                  "DCIM/Camera", "DCIM/Screenshots", "Pictures", "Pictures/Screenshots",
-                  "Download", "Movies", "WhatsApp/Media/WhatsApp Images", "WhatsApp/Media/WhatsApp Video",
-                  "Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Images",
-                  "Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Video"
-              };
 
               @Override
               protected void onCreate(Bundle savedInstanceState) {
@@ -187,17 +208,54 @@ jobs:
                   bLock.setOnClickListener(v -> showCalculatorUI());
                   l.addView(bLock);
 
+                  panicStatusText = new TextView(this);
+                  panicStatusText.setText("1-Tap Full Gallery Hide (Camera, WhatsApp, Facebook, Aadhaar, Movies):");
+                  panicStatusText.setTextColor(Color.WHITE);
+                  panicStatusText.setTextSize(16);
+                  panicStatusText.setPadding(0, 40, 0, 15);
+                  l.addView(panicStatusText);
+
+                  LinearLayout.LayoutParams mp = new LinearLayout.LayoutParams(
+                          LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                  mp.setMargins(0, 15, 0, 15);
+
+                  Button bHideAll = new Button(this);
+                  bHideAll.setText("HIDE ALL ALBUMS (1-TAP)");
+                  bHideAll.setBackgroundColor(Color.parseColor("#D32F2F"));
+                  bHideAll.setTextColor(Color.WHITE);
+                  bHideAll.setPadding(20, 40, 20, 40);
+                  bHideAll.setLayoutParams(mp);
+                  bHideAll.setOnClickListener(v -> toggleAllAlbums(true));
+                  l.addView(bHideAll);
+
+                  Button bUnhideAll = new Button(this);
+                  bUnhideAll.setText("UNHIDE ALL ALBUMS");
+                  bUnhideAll.setBackgroundColor(Color.parseColor("#388E3C"));
+                  bUnhideAll.setTextColor(Color.WHITE);
+                  bUnhideAll.setPadding(20, 40, 20, 40);
+                  bUnhideAll.setLayoutParams(mp);
+                  bUnhideAll.setOnClickListener(v -> toggleAllAlbums(false));
+                  l.addView(bUnhideAll);
+
+                  TextView s2 = new TextView(this);
+                  s2.setText("Or Select Specific Photos/Videos:");
+                  s2.setTextColor(Color.LTGRAY);
+                  s2.setPadding(0, 40, 0, 10);
+                  l.addView(s2);
+
                   Button bSel = new Button(this);
                   bSel.setText("+ SELECT PHOTOS / VIDEOS TO HIDE");
                   bSel.setBackgroundColor(Color.parseColor("#1976D2"));
                   bSel.setTextColor(Color.WHITE);
+                  bSel.setLayoutParams(mp);
                   bSel.setOnClickListener(v -> openPicker());
                   l.addView(bSel);
 
                   Button bRes = new Button(this);
-                  bRes.setText("RESTORE ALL SELECTED FILES");
+                  bRes.setText("RESTORE SELECTED FILES");
                   bRes.setBackgroundColor(Color.parseColor("#00796B"));
                   bRes.setTextColor(Color.WHITE);
+                  bRes.setLayoutParams(mp);
                   bRes.setOnClickListener(v -> restoreAll());
                   l.addView(bRes);
 
@@ -205,29 +263,88 @@ jobs:
                   vaultListContainer.setOrientation(LinearLayout.VERTICAL);
                   l.addView(vaultListContainer);
 
-                  panicStatusText = new TextView(this);
-                  panicStatusText.setText("1-Tap Full Gallery Panic Hide:");
-                  panicStatusText.setTextColor(Color.LTGRAY);
-                  panicStatusText.setPadding(0, 30, 0, 10);
-                  l.addView(panicStatusText);
-
-                  Button bHideAll = new Button(this);
-                  bHideAll.setText("HIDE ENTIRE GALLERY (1-TAP)");
-                  bHideAll.setBackgroundColor(Color.parseColor("#D32F2F"));
-                  bHideAll.setTextColor(Color.WHITE);
-                  bHideAll.setOnClickListener(v -> toggleAll(true));
-                  l.addView(bHideAll);
-
-                  Button bUnhideAll = new Button(this);
-                  bUnhideAll.setText("UNHIDE ENTIRE GALLERY");
-                  bUnhideAll.setBackgroundColor(Color.parseColor("#388E3C"));
-                  bUnhideAll.setTextColor(Color.WHITE);
-                  bUnhideAll.setOnClickListener(v -> toggleAll(false));
-                  l.addView(bUnhideAll);
-
                   sv.addView(l);
                   setContentView(sv);
                   refreshList();
+              }
+
+              // Smart Folder Rename + .nomedia for 100% Hiding across all Albums
+              private void toggleAllAlbums(boolean hide) {
+                  File root = Environment.getExternalStorageDirectory();
+                  File[] topDirs = root.listFiles();
+                  int count = 0;
+
+                  if (topDirs != null) {
+                      for (File d : topDirs) {
+                          if (!d.isDirectory()) continue;
+                          String name = d.getName();
+                          if (name.equals("Android") || name.equals(".CalculatorVault")) continue;
+
+                          if (hide) {
+                              if (!name.startsWith(".")) {
+                                  // Lock subfolders inside DCIM, Pictures, Movies, Download
+                                  File[] subs = d.listFiles();
+                                  if (subs != null) {
+                                      for (File sub : subs) {
+                                          if (sub.isDirectory() && !sub.getName().startsWith(".")) {
+                                              try { new File(sub, ".nomedia").createNewFile(); } catch (Exception ignored) {}
+                                              File renamedSub = new File(d, ".locked_" + sub.getName());
+                                              sub.renameTo(renamedSub);
+                                          }
+                                      }
+                                  }
+                                  try { new File(d, ".nomedia").createNewFile(); } catch (Exception ignored) {}
+                                  File renamedTop = new File(root, ".locked_" + name);
+                                  if (d.renameTo(renamedTop)) count++;
+                              }
+                          } else {
+                              if (name.startsWith(".locked_")) {
+                                  File origTop = new File(root, name.replace(".locked_", ""));
+                                  d.renameTo(origTop);
+                                  new File(origTop, ".nomedia").delete();
+                                  File[] subs = origTop.listFiles();
+                                  if (subs != null) {
+                                      for (File sub : subs) {
+                                          if (sub.isDirectory() && sub.getName().startsWith(".locked_")) {
+                                              File origSub = new File(origTop, sub.getName().replace(".locked_", ""));
+                                              sub.renameTo(origSub);
+                                              new File(origSub, ".nomedia").delete();
+                                          }
+                                      }
+                                  }
+                                  count++;
+                              } else {
+                                  new File(d, ".nomedia").delete();
+                                  File[] subs = d.listFiles();
+                                  if (subs != null) {
+                                      for (File sub : subs) {
+                                          if (sub.isDirectory() && sub.getName().startsWith(".locked_")) {
+                                              File origSub = new File(d, sub.getName().replace(".locked_", ""));
+                                              sub.renameTo(origSub);
+                                              new File(origSub, ".nomedia").delete();
+                                              count++;
+                                          }
+                                      }
+                                  }
+                              }
+                          }
+                      }
+                  }
+
+                  // Also handle WhatsApp inside Android/media
+                  File waRoot = new File(root, "Android/media/com.whatsapp/WhatsApp/Media");
+                  if (waRoot.exists() && waRoot.listFiles() != null) {
+                      for (File wf : waRoot.listFiles()) {
+                          if (wf.isDirectory()) {
+                              File nm = new File(wf, ".nomedia");
+                              try { if (hide) nm.createNewFile(); else nm.delete(); } catch (Exception ignored) {}
+                          }
+                      }
+                  }
+
+                  MediaScannerConnection.scanFile(this, new String[]{root.getAbsolutePath()}, null, null);
+                  panicStatusText.setText(hide ? "ALL ALBUMS HIDDEN!" : "ALL ALBUMS RESTORED!");
+                  Toast.makeText(this, hide ? "All Albums Hidden!" : "All Albums Unhidden!", Toast.LENGTH_LONG).show();
               }
 
               private File getVault() {
@@ -302,19 +419,6 @@ jobs:
                   refreshList();
               }
 
-              private void toggleAll(boolean hide) {
-                  File root = Environment.getExternalStorageDirectory();
-                  for (String p : targetFolders) {
-                      File dir = new File(root, p);
-                      if (dir.exists() && dir.isDirectory()) {
-                          File nm = new File(dir, ".nomedia");
-                          try { if (hide) nm.createNewFile(); else nm.delete(); } catch (IOException ignored) {}
-                          MediaScannerConnection.scanFile(this, new String[]{dir.getAbsolutePath()}, null, null);
-                      }
-                  }
-                  Toast.makeText(this, hide ? "Gallery Hidden!" : "Gallery Unhidden!", Toast.LENGTH_SHORT).show();
-              }
-
               private boolean checkPerm() {
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
                       Intent i = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:" + getPackageName()));
@@ -324,13 +428,15 @@ jobs:
                   return true;
               }
           }
-          """
-          open("app/src/main/java/com/example/onetaphide/MainActivity.java", "w").write(java_code)
+          ''')
 
-      - name: Compile Debug APK
-        run: gradle assembleDebug
+      - name: Build APK with Gradle Action
+        uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: 8.2
+          arguments: assembleDebug
 
-      - name: Upload APK
+      - name: Upload Ready APK
         uses: actions/upload-artifact@v4
         with:
           name: Calculator-Vault-APK
