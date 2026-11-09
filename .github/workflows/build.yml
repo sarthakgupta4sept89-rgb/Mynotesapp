@@ -9,17 +9,24 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Generate Project & Code Automatically
+      - name: Clean & Generate Project Files
+        shell: python
         run: |
-          mkdir -p app/src/main/java/com/example/onetaphide
-          
-          cat << 'EOF' > settings.gradle
-          rootProject.name = "Calculator"
-          include ':app'
-          EOF
+          import os, shutil
 
-          cat << 'EOF' > build.gradle
-          buildscript {
+          # Purani files saaf karna taaki conflict na ho
+          for item in ['app', 'src', 'build.gradle', 'settings.gradle']:
+              if os.path.exists(item):
+                  if os.path.isdir(item): shutil.rmtree(item)
+                  else: os.remove(item)
+
+          os.makedirs("app/src/main/java/com/example/onetaphide", exist_ok=True)
+
+          with open("settings.gradle", "w") as f:
+              f.write('rootProject.name = "Calculator"\ninclude ":app"\n')
+
+          with open("build.gradle", "w") as f:
+              f.write('''buildscript {
               repositories {
                   google()
                   mavenCentral()
@@ -34,10 +41,10 @@ jobs:
                   mavenCentral()
               }
           }
-          EOF
+          ''')
 
-          cat << 'EOF' > app/build.gradle
-          plugins {
+          with open("app/build.gradle", "w") as f:
+              f.write('''plugins {
               id 'com.android.application'
           }
           android {
@@ -63,10 +70,10 @@ jobs:
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
           }
-          EOF
+          ''')
 
-          cat << 'EOF' > app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
+          with open("app/src/main/AndroidManifest.xml", "w") as f:
+              f.write('''<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               xmlns:tools="http://schemas.android.com/tools">
 
@@ -91,10 +98,10 @@ jobs:
                   </activity>
               </application>
           </manifest>
-          EOF
+          ''')
 
-          cat << 'EOF' > app/src/main/java/com/example/onetaphide/MainActivity.java
-          package com.example.onetaphide;
+          with open("app/src/main/java/com/example/onetaphide/MainActivity.java", "w") as f:
+              f.write('''package com.example.onetaphide;
 
           import android.app.Activity;
           import android.content.ClipData;
@@ -179,8 +186,8 @@ jobs:
                   grid.setRowCount(5);
 
                   String[] buttons = {
-                          "C", "⌫", "%", "÷",
-                          "7", "8", "9", "×",
+                          "C", "DEL", "%", "/",
+                          "7", "8", "9", "*",
                           "4", "5", "6", "-",
                           "1", "2", "3", "+",
                           "00", "0", ".", "="
@@ -189,13 +196,13 @@ jobs:
                   for (String text : buttons) {
                       Button btn = new Button(this);
                       btn.setText(text);
-                      btn.setTextSize(24);
+                      btn.setTextSize(22);
                       btn.setTextColor(Color.WHITE);
                       btn.setTypeface(null, Typeface.BOLD);
 
                       if (text.equals("=")) {
                           btn.setBackgroundColor(Color.parseColor("#FF9800"));
-                      } else if ("÷×-+C⌫%".contains(text)) {
+                      } else if ("/*-+CDEL%".contains(text)) {
                           btn.setBackgroundColor(Color.parseColor("#333333"));
                       } else {
                           btn.setBackgroundColor(Color.parseColor("#1E1E1E"));
@@ -232,12 +239,12 @@ jobs:
                       operator = "";
                       startNewNumber = true;
                       calcDisplay.setText("0");
-                  } else if (key.equals("⌫")) {
+                  } else if (key.equals("DEL")) {
                       if (!currentInput.isEmpty()) {
                           currentInput = currentInput.substring(0, currentInput.length() - 1);
                           calcDisplay.setText(currentInput.isEmpty() ? "0" : currentInput);
                       }
-                  } else if ("÷×-+%".contains(key)) {
+                  } else if ("/*-+%".contains(key)) {
                       if (!currentInput.isEmpty()) {
                           firstOperand = Double.parseDouble(currentInput);
                           operator = key;
@@ -259,8 +266,8 @@ jobs:
                           switch (operator) {
                               case "+": result = firstOperand + secondOperand; break;
                               case "-": result = firstOperand - secondOperand; break;
-                              case "×": result = firstOperand * secondOperand; break;
-                              case "÷": result = secondOperand != 0 ? firstOperand / secondOperand : 0; break;
+                              case "*": result = firstOperand * secondOperand; break;
+                              case "/": result = secondOperand != 0 ? firstOperand / secondOperand : 0; break;
                               case "%": result = firstOperand % secondOperand; break;
                           }
                           if (result == (long) result) {
@@ -284,7 +291,7 @@ jobs:
                   layout.setPadding(45, 60, 45, 60);
 
                   TextView title = new TextView(this);
-                  title.setText("🕵️ Secret Media Vault");
+                  title.setText("Secret Media Vault");
                   title.setTextColor(Color.WHITE);
                   title.setTextSize(24);
                   title.setTypeface(null, Typeface.BOLD);
@@ -292,21 +299,21 @@ jobs:
                   layout.addView(title);
 
                   Button btnLock = new Button(this);
-                  btnLock.setText("⬅️ Lock & Return to Calculator");
+                  btnLock.setText("Lock & Return to Calculator");
                   btnLock.setBackgroundColor(Color.parseColor("#424242"));
                   btnLock.setTextColor(Color.WHITE);
                   btnLock.setOnClickListener(v -> showCalculatorUI());
                   layout.addView(btnLock);
 
                   TextView sec1 = new TextView(this);
-                  sec1.setText("\n📁 Option 1: Hide Selected Photos & Videos");
+                  sec1.setText("\\nOption 1: Hide Selected Photos & Videos");
                   sec1.setTextColor(Color.parseColor("#64B5F6"));
                   sec1.setTextSize(18);
                   sec1.setTypeface(null, Typeface.BOLD);
                   layout.addView(sec1);
 
                   Button btnSelectMedia = new Button(this);
-                  btnSelectMedia.setText("➕ SELECT PHOTOS / VIDEOS TO HIDE");
+                  btnSelectMedia.setText("+ SELECT PHOTOS / VIDEOS TO HIDE");
                   btnSelectMedia.setBackgroundColor(Color.parseColor("#1976D2"));
                   btnSelectMedia.setTextColor(Color.WHITE);
                   btnSelectMedia.setPadding(30, 40, 30, 40);
@@ -314,7 +321,7 @@ jobs:
                   layout.addView(btnSelectMedia);
 
                   Button btnRestoreAllSelected = new Button(this);
-                  btnRestoreAllSelected.setText("🔓 RESTORE ALL VAULT FILES");
+                  btnRestoreAllSelected.setText("RESTORE ALL VAULT FILES");
                   btnRestoreAllSelected.setBackgroundColor(Color.parseColor("#00796B"));
                   btnRestoreAllSelected.setTextColor(Color.WHITE);
                   LinearLayout.LayoutParams marginParams = new LinearLayout.LayoutParams(
@@ -330,7 +337,7 @@ jobs:
                   layout.addView(vaultListContainer);
 
                   TextView sec2 = new TextView(this);
-                  sec2.setText("\n⚡ Option 2: 1-Tap Panic Hide (Entire Phone)");
+                  sec2.setText("\\nOption 2: 1-Tap Panic Hide (Entire Phone)");
                   sec2.setTextColor(Color.parseColor("#FF8A65"));
                   sec2.setTextSize(18);
                   sec2.setTypeface(null, Typeface.BOLD);
@@ -343,7 +350,7 @@ jobs:
                   layout.addView(panicStatusText);
 
                   Button btnPanicHide = new Button(this);
-                  btnPanicHide.setText("🔒 HIDE ENTIRE GALLERY (1-TAP)");
+                  btnPanicHide.setText("HIDE ENTIRE GALLERY (1-TAP)");
                   btnPanicHide.setBackgroundColor(Color.parseColor("#D32F2F"));
                   btnPanicHide.setTextColor(Color.WHITE);
                   btnPanicHide.setLayoutParams(marginParams);
@@ -351,7 +358,7 @@ jobs:
                   layout.addView(btnPanicHide);
 
                   Button btnPanicUnhide = new Button(this);
-                  btnPanicUnhide.setText("👀 UNHIDE ENTIRE GALLERY");
+                  btnPanicUnhide.setText("UNHIDE ENTIRE GALLERY");
                   btnPanicUnhide.setBackgroundColor(Color.parseColor("#388E3C"));
                   btnPanicUnhide.setTextColor(Color.WHITE);
                   btnPanicUnhide.setLayoutParams(marginParams);
@@ -474,7 +481,7 @@ jobs:
                   for (File file : files) {
                       String cleanName = file.getName().replace(".lock", "");
                       Button itemBtn = new Button(this);
-                      itemBtn.setText("🔓 Restore: " + cleanName);
+                      itemBtn.setText("Restore: " + cleanName);
                       itemBtn.setTextColor(Color.WHITE);
                       itemBtn.setBackgroundColor(Color.parseColor("#263238"));
                       itemBtn.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
@@ -542,10 +549,10 @@ jobs:
                   }
 
                   if (hide) {
-                      panicStatusText.setText("Status: Full Gallery Hidden across " + count + " folders! 🕵️");
+                      panicStatusText.setText("Status: Full Gallery Hidden across " + count + " folders!");
                       Toast.makeText(this, "All Folders Hidden!", Toast.LENGTH_SHORT).show();
                   } else {
-                      panicStatusText.setText("Status: Full Gallery Visible across " + count + " folders! 👀");
+                      panicStatusText.setText("Status: Full Gallery Visible across " + count + " folders!");
                       Toast.makeText(this, "All Folders Unhidden!", Toast.LENGTH_SHORT).show();
                   }
               }
@@ -563,7 +570,7 @@ jobs:
                   return true;
               }
           }
-          EOF
+          ''')
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
