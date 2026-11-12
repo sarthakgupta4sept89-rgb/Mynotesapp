@@ -15,191 +15,436 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Create Android Project Files
+      - name: Create Project Files
         shell: python
         run: |
-          import os, shutil, base64
+          import os, shutil
 
           for p in os.listdir('.'):
               if p != '.github':
                   if os.path.isdir(p): shutil.rmtree(p)
                   else: os.remove(p)
 
-          os.makedirs("app/src/main/java/com/example/onetaphide", exist_ok=True)
+          os.makedirs('app/src/main/java/com/example/onetaphide', exist_ok=True)
 
-          open("gradle.properties", "w").write("android.useAndroidX=true\norg.gradle.jvmargs=-Xmx2048m\n")
-          open("settings.gradle", "w").write('rootProject.name = "Calculator"\ninclude ":app"\n')
-          
-          open("build.gradle", "w").write('''buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.1.0' }
-          }
-          allprojects {
-              repositories { google(); mavenCentral() }
-          }
-          ''')
+          with open('gradle.properties', 'w') as f:
+              f.write('android.useAndroidX=true\n')
 
-          open("app/build.gradle", "w").write('''plugins { id 'com.android.application' }
-          android {
-              namespace 'com.example.onetaphide'
-              compileSdk 34
-              defaultConfig {
-                  applicationId "com.example.onetaphide"
-                  minSdk 26
-                  targetSdk 34
-                  versionCode 3
-                  versionName "3.0"
+          with open('settings.gradle', 'w') as f:
+              f.write('rootProject.name = "Calculator"\ninclude ":app"\n')
+
+          with open('build.gradle', 'w') as f:
+              f.write('buildscript { repositories { google(); mavenCentral() }; dependencies { classpath "com.android.tools.build:gradle:8.1.0" } }\nallprojects { repositories { google(); mavenCentral() } }\n')
+
+          with open('app/build.gradle', 'w') as f:
+              f.write('plugins { id "com.android.application" }\nandroid { namespace "com.example.onetaphide"; compileSdk 34; defaultConfig { applicationId "com.example.onetaphide"; minSdk 26; targetSdk 34; versionCode 5; versionName "5.0" }; compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 } }\ndependencies { implementation "androidx.appcompat:appcompat:1.6.1" }\n')
+
+          with open('app/src/main/AndroidManifest.xml', 'w') as f:
+              f.write('<manifest xmlns:android="http://schemas.android.com/apk/res/android"><uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/><uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/><uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/><application android:allowBackup="true" android:label="Calculator" android:theme="@style/Theme.AppCompat.NoActionBar" android:requestLegacyExternalStorage="true"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity></application></manifest>')
+
+          code = '''package com.example.onetaphide;
+          import android.app.Activity;
+          import android.content.ClipData;
+          import android.content.Intent;
+          import android.database.Cursor;
+          import android.graphics.Color;
+          import android.graphics.Typeface;
+          import android.media.MediaScannerConnection;
+          import android.net.Uri;
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.os.Environment;
+          import android.provider.DocumentsContract;
+          import android.provider.MediaStore;
+          import android.provider.OpenableColumns;
+          import android.provider.Settings;
+          import android.view.Gravity;
+          import android.widget.Button;
+          import android.widget.GridLayout;
+          import android.widget.LinearLayout;
+          import android.widget.ScrollView;
+          import android.widget.TextView;
+          import android.widget.Toast;
+          import androidx.appcompat.app.AppCompatActivity;
+          import java.io.BufferedReader;
+          import java.io.File;
+          import java.io.FileOutputStream;
+          import java.io.FileReader;
+          import java.io.FileWriter;
+          import java.io.IOException;
+          import java.io.InputStream;
+          import java.io.OutputStream;
+          import java.io.PrintWriter;
+          import java.util.ArrayList;
+          import java.util.List;
+
+          public class MainActivity extends AppCompatActivity {
+              private static final String SECRET_PIN = "1234";
+              private static final int PICK_MEDIA_REQUEST = 101;
+              private TextView calcDisplay, panicStatusText;
+              private String currentInput = "", operator = "";
+              private double firstOperand = 0;
+              private boolean startNewNumber = true;
+              private LinearLayout vaultListContainer;
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  showCalculatorUI();
               }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
+
+              private void showCalculatorUI() {
+                  LinearLayout root = new LinearLayout(this);
+                  root.setOrientation(LinearLayout.VERTICAL);
+                  root.setBackgroundColor(Color.BLACK);
+                  root.setPadding(30, 60, 30, 40);
+
+                  calcDisplay = new TextView(this);
+                  calcDisplay.setText("0");
+                  calcDisplay.setTextColor(Color.WHITE);
+                  calcDisplay.setTextSize(48);
+                  calcDisplay.setGravity(Gravity.END);
+                  calcDisplay.setPadding(30, 100, 30, 60);
+                  root.addView(calcDisplay, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+
+                  GridLayout grid = new GridLayout(this);
+                  grid.setColumnCount(4);
+                  String[] buttons = {"C","DEL","%","/","7","8","9","*","4","5","6","-","1","2","3","+","00","0",".","="};
+                  for (String text : buttons) {
+                      Button btn = new Button(this);
+                      btn.setText(text);
+                      btn.setTextSize(22);
+                      btn.setTextColor(Color.WHITE);
+                      btn.setTypeface(null, Typeface.BOLD);
+                      btn.setBackgroundColor(text.equals("=") ? Color.parseColor("#FF9800") : ("/*-+CDEL%".contains(text) ? Color.parseColor("#333333") : Color.parseColor("#1E1E1E")));
+                      GridLayout.LayoutParams p = new GridLayout.LayoutParams();
+                      p.width = 0; p.height = 185;
+                      p.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);
+                      p.setMargins(10, 10, 10, 10);
+                      btn.setLayoutParams(p);
+                      btn.setOnClickListener(v -> onCalc(text));
+                      grid.addView(btn);
+                  }
+                  root.addView(grid);
+                  setContentView(root);
+              }
+
+              private void onCalc(String k) {
+                  if ("0123456789.".contains(k) || k.equals("00")) {
+                      if (startNewNumber) { currentInput = k.equals(".") ? "0." : k; startNewNumber = false; }
+                      else { if (k.equals(".") && currentInput.contains(".")) return; currentInput += k; }
+                      calcDisplay.setText(currentInput);
+                  } else if (k.equals("C")) {
+                      currentInput = ""; firstOperand = 0; operator = ""; startNewNumber = true; calcDisplay.setText("0");
+                  } else if (k.equals("DEL")) {
+                      if (!currentInput.isEmpty()) { currentInput = currentInput.substring(0, currentInput.length() - 1); calcDisplay.setText(currentInput.isEmpty() ? "0" : currentInput); }
+                  } else if ("/*-+%".contains(k)) {
+                      if (!currentInput.isEmpty()) { firstOperand = Double.parseDouble(currentInput); operator = k; startNewNumber = true; }
+                  } else if (k.equals("=")) {
+                      if (currentInput.equals(SECRET_PIN)) {
+                          currentInput = ""; calcDisplay.setText("0");
+                          if (checkPerm()) showVaultUI();
+                          return;
+                      }
+                      if (!operator.isEmpty() && !currentInput.isEmpty()) {
+                          double s = Double.parseDouble(currentInput), r = 0;
+                          if (operator.equals("+")) r = firstOperand + s;
+                          else if (operator.equals("-")) r = firstOperand - s;
+                          else if (operator.equals("*")) r = firstOperand * s;
+                          else if (operator.equals("/")) r = s != 0 ? firstOperand / s : 0;
+                          else if (operator.equals("%")) r = firstOperand % s;
+                          currentInput = (r == (long) r) ? String.valueOf((long) r) : String.valueOf(r);
+                          calcDisplay.setText(currentInput); operator = ""; startNewNumber = true;
+                      }
+                  }
+              }
+
+              private void showVaultUI() {
+                  ScrollView sv = new ScrollView(this);
+                  sv.setBackgroundColor(Color.parseColor("#121212"));
+                  LinearLayout l = new LinearLayout(this);
+                  l.setOrientation(LinearLayout.VERTICAL);
+                  l.setPadding(45, 60, 45, 60);
+
+                  Button bLock = new Button(this);
+                  bLock.setText("LOCK & RETURN TO CALCULATOR");
+                  bLock.setBackgroundColor(Color.parseColor("#424242"));
+                  bLock.setTextColor(Color.WHITE);
+                  bLock.setOnClickListener(v -> showCalculatorUI());
+                  l.addView(bLock);
+
+                  panicStatusText = new TextView(this);
+                  panicStatusText.setText("Ready: 1-Tap Full Phone Media Vault");
+                  panicStatusText.setTextColor(Color.parseColor("#FFD54F"));
+                  panicStatusText.setTextSize(16);
+                  panicStatusText.setTypeface(null, Typeface.BOLD);
+                  panicStatusText.setPadding(0, 40, 0, 15);
+                  l.addView(panicStatusText);
+
+                  LinearLayout.LayoutParams mp = new LinearLayout.LayoutParams(
+                          LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                  mp.setMargins(0, 15, 0, 15);
+
+                  Button bHideAll = new Button(this);
+                  bHideAll.setText("HIDE ALL PHOTOS & VIDEOS (1-TAP)");
+                  bHideAll.setBackgroundColor(Color.parseColor("#D32F2F"));
+                  bHideAll.setTextColor(Color.WHITE);
+                  bHideAll.setPadding(20, 40, 20, 40);
+                  bHideAll.setLayoutParams(mp);
+                  bHideAll.setOnClickListener(v -> hideAllMediaFiles());
+                  l.addView(bHideAll);
+
+                  Button bUnhideAll = new Button(this);
+                  bUnhideAll.setText("UNHIDE ALL PHOTOS & VIDEOS");
+                  bUnhideAll.setBackgroundColor(Color.parseColor("#388E3C"));
+                  bUnhideAll.setTextColor(Color.WHITE);
+                  bUnhideAll.setPadding(20, 40, 20, 40);
+                  bUnhideAll.setLayoutParams(mp);
+                  bUnhideAll.setOnClickListener(v -> unhideAllMediaFiles());
+                  l.addView(bUnhideAll);
+
+                  TextView s2 = new TextView(this);
+                  s2.setText("Or Select Specific Photos/Videos:");
+                  s2.setTextColor(Color.LTGRAY);
+                  s2.setPadding(0, 40, 0, 10);
+                  l.addView(s2);
+
+                  Button bSel = new Button(this);
+                  bSel.setText("+ SELECT PHOTOS / VIDEOS TO HIDE");
+                  bSel.setBackgroundColor(Color.parseColor("#1976D2"));
+                  bSel.setTextColor(Color.WHITE);
+                  bSel.setLayoutParams(mp);
+                  bSel.setOnClickListener(v -> openPicker());
+                  l.addView(bSel);
+
+                  Button bRes = new Button(this);
+                  bRes.setText("RESTORE SELECTED FILES");
+                  bRes.setBackgroundColor(Color.parseColor("#00796B"));
+                  bRes.setTextColor(Color.WHITE);
+                  bRes.setLayoutParams(mp);
+                  bRes.setOnClickListener(v -> restoreAll());
+                  l.addView(bRes);
+
+                  vaultListContainer = new LinearLayout(this);
+                  vaultListContainer.setOrientation(LinearLayout.VERTICAL);
+                  l.addView(vaultListContainer);
+
+                  sv.addView(l);
+                  setContentView(sv);
+                  refreshList();
+              }
+
+              private File getBulkVault() {
+                  File v = new File(Environment.getExternalStorageDirectory(), ".CalculatorBulkVault");
+                  if (!v.exists()) v.mkdirs();
+                  try { new File(v, ".nomedia").createNewFile(); } catch (IOException ignored) {}
+                  return v;
+              }
+
+              private boolean isMediaFile(String name) {
+                  String n = name.toLowerCase();
+                  return n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".png") ||
+                         n.endsWith(".webp") || n.endsWith(".heic") || n.endsWith(".mp4") ||
+                         n.endsWith(".mkv") || n.endsWith(".3gp") || n.endsWith(".mov") || n.endsWith(".avi");
+              }
+
+              private void collectMediaFiles(File dir, List<File> list) {
+                  File[] files = dir.listFiles();
+                  if (files == null) return;
+                  for (File f : files) {
+                      String name = f.getName();
+                      if (name.startsWith(".Calculator") || name.startsWith(".locked_")) continue;
+                      if (f.isDirectory()) {
+                          if (!name.equals("data") && !name.equals("obb")) {
+                              collectMediaFiles(f, list);
+                          }
+                      } else if (isMediaFile(name)) {
+                          list.add(f);
+                      }
+                  }
+              }
+
+              private void hideAllMediaFiles() {
+                  panicStatusText.setText("Hiding all photos & videos... Please wait.");
+                  new Thread(() -> {
+                      File root = Environment.getExternalStorageDirectory();
+                      File bulkVault = getBulkVault();
+                      File mapFile = new File(bulkVault, "map.txt");
+
+                      List<File> mediaFiles = new ArrayList<>();
+                      collectMediaFiles(root, mediaFiles);
+
+                      int moved = 0;
+                      try (PrintWriter pw = new PrintWriter(new FileWriter(mapFile, true))) {
+                          for (File f : mediaFiles) {
+                              String origPath = f.getAbsolutePath();
+                              String lockName = "bulk_" + System.nanoTime() + ".lock";
+                              File dest = new File(bulkVault, lockName);
+                              if (f.renameTo(dest)) {
+                                  pw.println(lockName + ":::" + origPath);
+                                  moved++;
+                              }
+                          }
+                      } catch (Exception ignored) {}
+
+                      try {
+                          getContentResolver().delete(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, null, null);
+                          getContentResolver().delete(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, null, null);
+                      } catch (Exception ignored) {}
+
+                      final int totalMoved = moved;
+                      runOnUiThread(() -> {
+                          panicStatusText.setText("HIDDEN " + totalMoved + " PHOTOS & VIDEOS!");
+                          Toast.makeText(this, totalMoved + " files hidden from Gallery!", Toast.LENGTH_LONG).show();
+                      });
+                  }).start();
+              }
+
+              private void unhideAllMediaFiles() {
+                  panicStatusText.setText("Restoring all photos & videos... Please wait.");
+                  new Thread(() -> {
+                      File bulkVault = getBulkVault();
+                      File mapFile = new File(bulkVault, "map.txt");
+                      int restored = 0;
+                      List<String> restoredPaths = new ArrayList<>();
+
+                      if (mapFile.exists()) {
+                          try (BufferedReader br = new BufferedReader(new FileReader(mapFile))) {
+                              String line;
+                              while ((line = br.readLine()) != null) {
+                                  int sep = line.indexOf(":::");
+                                  if (sep > 0) {
+                                      String lockName = line.substring(0, sep);
+                                      String origPath = line.substring(sep + 3);
+                                      File lockedFile = new File(bulkVault, lockName);
+                                      if (lockedFile.exists()) {
+                                          File origFile = new File(origPath);
+                                          if (origFile.getParentFile() != null && !origFile.getParentFile().exists()) {
+                                              origFile.getParentFile().mkdirs();
+                                          }
+                                          if (lockedFile.renameTo(origFile)) {
+                                              restored++;
+                                              restoredPaths.add(origFile.getAbsolutePath());
+                                          }
+                                      }
+                                  }
+                              }
+                          } catch (Exception ignored) {}
+                          mapFile.delete();
+                      }
+
+                      if (!restoredPaths.isEmpty()) {
+                          MediaScannerConnection.scanFile(this, restoredPaths.toArray(new String[0]), null, null);
+                      }
+
+                      final int totalRestored = restored;
+                      runOnUiThread(() -> {
+                          panicStatusText.setText("RESTORED " + totalRestored + " PHOTOS & VIDEOS!");
+                          Toast.makeText(this, totalRestored + " files restored to Gallery!", Toast.LENGTH_LONG).show();
+                      });
+                  }).start();
+              }
+
+              private File getVault() {
+                  File v = new File(Environment.getExternalStorageDirectory(), ".CalculatorVault");
+                  if (!v.exists()) v.mkdirs();
+                  try { new File(v, ".nomedia").createNewFile(); } catch (IOException ignored) {}
+                  return v;
+              }
+
+              private void openPicker() {
+                  Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                  i.addCategory(Intent.CATEGORY_OPENABLE);
+                  i.setType("*/*");
+                  i.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"image/*", "video/*"});
+                  i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                  startActivityForResult(i, PICK_MEDIA_REQUEST);
+              }
+
+              @Override
+              protected void onActivityResult(int req, int res, Intent d) {
+                  super.onActivityResult(req, res, d);
+                  if (req == PICK_MEDIA_REQUEST && res == Activity.RESULT_OK && d != null) {
+                      if (d.getClipData() != null) {
+                          ClipData cd = d.getClipData();
+                          for (int i = 0; i < cd.getItemCount(); i++) hideUri(cd.getItemAt(i).getUri());
+                      } else if (d.getData() != null) hideUri(d.getData());
+                      refreshList();
+                  }
+              }
+
+              private void hideUri(Uri u) {
+                  try {
+                      String name = "file_" + System.currentTimeMillis();
+                      try (Cursor c = getContentResolver().query(u, null, null, null, null)) {
+                          if (c != null && c.moveToFirst()) {
+                              int idx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                              if (idx >= 0) name = c.getString(idx);
+                          }
+                      }
+                      File dest = new File(getVault(), name + ".lock");
+                      InputStream in = getContentResolver().openInputStream(u);
+                      OutputStream out = new FileOutputStream(dest);
+                      byte[] b = new byte[8192]; int len;
+                      while ((len = in.read(b)) > 0) out.write(b, 0, len);
+                      in.close(); out.close();
+                      try { DocumentsContract.deleteDocument(getContentResolver(), u); } catch (Exception ignored) {}
+                      try {
+                          getContentResolver().delete(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, MediaStore.MediaColumns.DISPLAY_NAME + "=?", new String[]{name});
+                          getContentResolver().delete(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, MediaStore.MediaColumns.DISPLAY_NAME + "=?", new String[]{name});
+                      } catch (Exception ignored) {}
+                  } catch (Exception ignored) {}
+              }
+
+              private void refreshList() {
+                  vaultListContainer.removeAllViews();
+                  File[] fs = getVault().listFiles((dir, n) -> n.endsWith(".lock"));
+                  if (fs == null) return;
+                  for (File f : fs) {
+                      Button b = new Button(this);
+                      b.setText("Restore: " + f.getName().replace(".lock", ""));
+                      b.setOnClickListener(v -> { restoreFile(f); refreshList(); });
+                      vaultListContainer.addView(b);
+                  }
+              }
+
+              private void restoreFile(File f) {
+                  File rDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM), "Restored");
+                  if (!rDir.exists()) rDir.mkdirs();
+                  File dest = new File(rDir, f.getName().replace(".lock", ""));
+                  if (f.renameTo(dest)) {
+                      MediaScannerConnection.scanFile(this, new String[]{dest.getAbsolutePath()}, null, null);
+                      Toast.makeText(this, "Restored to DCIM/Restored!", Toast.LENGTH_SHORT).show();
+                  }
+              }
+
+              private void restoreAll() {
+                  File[] fs = getVault().listFiles((dir, n) -> n.endsWith(".lock"));
+                  if (fs != null) for (File f : fs) restoreFile(f);
+                  refreshList();
+              }
+
+              private boolean checkPerm() {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
+                      Intent i = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:" + getPackageName()));
+                      startActivity(i);
+                      return false;
+                  }
+                  return true;
               }
           }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-          }
-          ''')
+          '''
+          with open('app/src/main/java/com/example/onetaphide/MainActivity.java', 'w') as f:
+              f.write(code)
 
-          open("app/src/main/AndroidManifest.xml", "w").write('''<?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-              <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
-              <application
-                  android:allowBackup="true"
-                  android:label="Calculator"
-                  android:theme="@style/Theme.AppCompat.NoActionBar"
-                  android:requestLegacyExternalStorage="true">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          ''')
+      - name: Build APK with Gradle Action
+        uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: 8.2
+          arguments: assembleDebug
 
-          java_lines = [
-              'package com.example.onetaphide;',
-              'import android.app.Activity;',
-              'import android.content.ClipData;',
-              'import android.content.Intent;',
-              'import android.database.Cursor;',
-              'import android.graphics.Color;',
-              'import android.graphics.Typeface;',
-              'import android.media.MediaScannerConnection;',
-              'import android.net.Uri;',
-              'import android.os.Build;',
-              'import android.os.Bundle;',
-              'import android.os.Environment;',
-              'import android.provider.DocumentsContract;',
-              'import android.provider.MediaStore;',
-              'import android.provider.OpenableColumns;',
-              'import android.provider.Settings;',
-              'import android.view.Gravity;',
-              'import android.widget.Button;',
-              'import android.widget.GridLayout;',
-              'import android.widget.LinearLayout;',
-              'import android.widget.ScrollView;',
-              'import android.widget.TextView;',
-              'import android.widget.Toast;',
-              'import androidx.appcompat.app.AppCompatActivity;',
-              'import java.io.BufferedReader;',
-              'import java.io.File;',
-              'import java.io.FileOutputStream;',
-              'import java.io.FileReader;',
-              'import java.io.FileWriter;',
-              'import java.io.IOException;',
-              'import java.io.InputStream;',
-              'import java.io.OutputStream;',
-              'import java.io.PrintWriter;',
-              'import java.util.ArrayList;',
-              'import java.util.List;',
-              'public class MainActivity extends AppCompatActivity {',
-              '    private static final String SECRET_PIN = "1234";',
-              '    private static final int PICK_MEDIA_REQUEST = 101;',
-              '    private TextView calcDisplay, panicStatusText;',
-              '    private String currentInput = "", operator = "";',
-              '    private double firstOperand = 0;',
-              '    private boolean startNewNumber = true;',
-              '    private LinearLayout vaultListContainer;',
-              '    @Override',
-              '    protected void onCreate(Bundle savedInstanceState) {',
-              '        super.onCreate(savedInstanceState);',
-              '        showCalculatorUI();',
-              '    }',
-              '    private void showCalculatorUI() {',
-              '        LinearLayout root = new LinearLayout(this);',
-              '        root.setOrientation(LinearLayout.VERTICAL);',
-              '        root.setBackgroundColor(Color.BLACK);',
-              '        root.setPadding(30, 60, 30, 40);',
-              '        calcDisplay = new TextView(this);',
-              '        calcDisplay.setText("0");',
-              '        calcDisplay.setTextColor(Color.WHITE);',
-              '        calcDisplay.setTextSize(48);',
-              '        calcDisplay.setGravity(Gravity.BOTTOM | Gravity.END);',
-              '        calcDisplay.setPadding(30, 100, 30, 60);',
-              '        root.addView(calcDisplay, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));',
-              '        GridLayout grid = new GridLayout(this);',
-              '        grid.setColumnCount(4);',
-              '        String[] buttons = {"C","DEL","%","/","7","8","9","*","4","5","6","-","1","2","3","+","00","0",".","="};',
-              '        for (String text : buttons) {',
-              '            Button btn = new Button(this);',
-              '            btn.setText(text);',
-              '            btn.setTextSize(22);',
-              '            btn.setTextColor(Color.WHITE);',
-              '            btn.setTypeface(null, Typeface.BOLD);',
-              '            btn.setBackgroundColor(text.equals("=") ? Color.parseColor("#FF9800") : ("/*-+CDEL%".contains(text) ? Color.parseColor("#333333") : Color.parseColor("#1E1E1E")));',
-              '            GridLayout.LayoutParams p = new GridLayout.LayoutParams();',
-              '            p.width = 0; p.height = 185;',
-              '            p.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);',
-              '            p.setMargins(10, 10, 10, 10);',
-              '            btn.setLayoutParams(p);',
-              '            btn.setOnClickListener(v -> onCalc(text));',
-              '            grid.addView(btn);',
-              '        }',
-              '        root.addView(grid);',
-              '        setContentView(root);',
-              '    }',
-              '    private void onCalc(String k) {',
-              '        if ("0123456789.".contains(k) || k.equals("00")) {',
-              '            if (startNewNumber) { currentInput = k.equals(".") ? "0." : k; startNewNumber = false; }',
-              '            else { if (k.equals(".") && currentInput.contains(".")) return; currentInput += k; }',
-              '            calcDisplay.setText(currentInput);',
-              '        } else if (k.equals("C")) {',
-              '            currentInput = ""; firstOperand = 0; operator = ""; startNewNumber = true; calcDisplay.setText("0");',
-              '        } else if (k.equals("DEL")) {',
-              '            if (!currentInput.isEmpty()) { currentInput = currentInput.substring(0, currentInput.length() - 1); calcDisplay.setText(currentInput.isEmpty() ? "0" : currentInput); }',
-              '        } else if ("/*-+%".contains(k)) {',
-              '            if (!currentInput.isEmpty()) { firstOperand = Double.parseDouble(currentInput); operator = k; startNewNumber = true; }',
-              '        } else if (k.equals("=")) {',
-              '            if (currentInput.equals(SECRET_PIN)) {',
-              '                currentInput = ""; calcDisplay.setText("0");',
-              '                if (checkPerm()) showVaultUI();',
-              '                return;',
-              '            }',
-              '            if (!operator.isEmpty() && !currentInput.isEmpty()) {',
-              '                double s = Double.parseDouble(currentInput), r = 0;',
-              '                if (operator.equals("+")) r = firstOperand + s;',
-              '                else if (operator.equals("-")) r = firstOperand - s;',
-              '                else if (operator.equals("*")) r = firstOperand * s;',
-              '                else if (operator.equals("/")) r = s != 0 ? firstOperand / s : 0;',
-              '                else if (operator.equals("%")) r = firstOperand % s;',
-              '                currentInput = (r == (long) r) ? String.valueOf((long) r) : String.valueOf(r);',
-              '                calcDisplay.setText(currentInput); operator = ""; startNewNumber = true;',
-              '            }',
-              '        }',
-              '    }',
-              '    private void showVaultUI() {',
-              '        ScrollView sv = new ScrollView(this);',
-              '        sv.setBackgroundColor(Color.parseColor("#121212"));',
-              '        LinearLayout l = new LinearLayout(this);',
-              '        l.setOrientation(LinearLayout.VERTICAL);',
-              '        l.setPadding(45, 60, 45, 60);',
-              '        Button bLock = new Button(this);',
-              '        bLock.setText("LOCK & RETURN TO CALCULATOR");',
-              '        bLock.setBackgroundColor(Color.parseColor("#424242"));',
-              '        bLock.setTextColor(Color.WHITE);',
-              '        bLock.setOnClickListener(v -> showCalculatorUI());',
-              
+      - name: Upload Ready APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Calculator-Vault-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
