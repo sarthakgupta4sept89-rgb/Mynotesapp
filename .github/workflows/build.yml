@@ -37,7 +37,7 @@ jobs:
               f.write('buildscript { repositories { google(); mavenCentral() }; dependencies { classpath "com.android.tools.build:gradle:8.1.0" } }\nallprojects { repositories { google(); mavenCentral() } }\n')
 
           with open('app/build.gradle', 'w') as f:
-              f.write('plugins { id "com.android.application" }\nandroid { namespace "com.example.onetaphide"; compileSdk 34; defaultConfig { applicationId "com.example.onetaphide"; minSdk 26; targetSdk 34; versionCode 7; versionName "7.0" }; compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 } }\ndependencies { implementation "androidx.appcompat:appcompat:1.6.1" }\n')
+              f.write('plugins { id "com.android.application" }\nandroid { namespace "com.example.onetaphide"; compileSdk 34; defaultConfig { applicationId "com.example.onetaphide"; minSdk 26; targetSdk 34; versionCode 6; versionName "6.0" }; compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 } }\ndependencies { implementation "androidx.appcompat:appcompat:1.6.1" }\n')
 
           with open('app/src/main/AndroidManifest.xml', 'w') as f:
               f.write('<manifest xmlns:android="http://schemas.android.com/apk/res/android"><uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/><uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/><uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/><application android:allowBackup="true" android:label="Calculator" android:theme="@style/Theme.AppCompat.NoActionBar" android:requestLegacyExternalStorage="true"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity></application></manifest>')
@@ -174,7 +174,7 @@ jobs:
                   l.addView(bLock);
 
                   panicStatusText = new TextView(this);
-                  panicStatusText.setText("Ready: Complete File Manager & Gallery Hide");
+                  panicStatusText.setText("Ready: Only Active Gallery Albums (No Deleted/Trash Files)");
                   panicStatusText.setTextColor(Color.parseColor("#FFD54F"));
                   panicStatusText.setTextSize(15);
                   panicStatusText.setTypeface(null, Typeface.BOLD);
@@ -186,7 +186,7 @@ jobs:
                   mp.setMargins(0, 15, 0, 15);
 
                   Button bHideAll = new Button(this);
-                  bHideAll.setText("HIDE ALL PHOTOS & VIDEOS (1-TAP)");
+                  bHideAll.setText("HIDE ALL GALLERY PHOTOS & VIDEOS");
                   bHideAll.setBackgroundColor(Color.parseColor("#D32F2F"));
                   bHideAll.setTextColor(Color.WHITE);
                   bHideAll.setPadding(20, 40, 20, 40);
@@ -195,7 +195,7 @@ jobs:
                   l.addView(bHideAll);
 
                   Button bUnhideAll = new Button(this);
-                  bUnhideAll.setText("UNHIDE ALL PHOTOS & VIDEOS");
+                  bUnhideAll.setText("UNHIDE GALLERY PHOTOS & VIDEOS");
                   bUnhideAll.setBackgroundColor(Color.parseColor("#388E3C"));
                   bUnhideAll.setTextColor(Color.WHITE);
                   bUnhideAll.setPadding(20, 40, 20, 40);
@@ -248,14 +248,16 @@ jobs:
                          n.endsWith(".mkv") || n.endsWith(".3gp") || n.endsWith(".mov") || n.endsWith(".avi");
               }
 
+              // STRICT FILTER: Ignore all hidden, dot, trash, recycle, thumbnail, and cache folders
               private boolean isTrashOrHiddenFolder(File dir) {
                   String name = dir.getName().toLowerCase();
                   if (name.startsWith(".")) return true;
                   if (name.contains("trash") || name.contains("recycle") || name.contains("deleted") ||
                       name.contains("thumb") || name.contains("cache") || name.contains("temp") ||
-                      name.contains("backup") || name.equals("data") || name.equals("obb")) {
+                      name.contains("backup") || name.contains("sent") || name.equals("data") || name.equals("obb")) {
                       return true;
                   }
+                  if (new File(dir, ".nomedia").exists()) return true;
                   return false;
               }
 
@@ -275,13 +277,14 @@ jobs:
               }
 
               private void hideAllMediaFiles() {
-                  panicStatusText.setText("Hiding from Files app & Gallery... Please wait.");
+                  panicStatusText.setText("Hiding active Gallery albums... Please wait.");
                   new Thread(() -> {
                       File root = Environment.getExternalStorageDirectory();
                       File bulkVault = getBulkVault();
                       File mapFile = new File(bulkVault, "map.txt");
 
                       List<File> mediaFiles = new ArrayList<>();
+                      // Scan only user-visible top folders, plus WhatsApp Media
                       File[] topFolders = root.listFiles();
                       if (topFolders != null) {
                           for (File folder : topFolders) {
@@ -290,6 +293,7 @@ jobs:
                               }
                           }
                       }
+                      // Specifically include active WhatsApp Images & Video (excluding Sent/Private hidden folders)
                       File waImg = new File(root, "Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Images");
                       File waVid = new File(root, "Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Video");
                       collectActiveGalleryFiles(waImg, mediaFiles);
@@ -315,14 +319,14 @@ jobs:
 
                       final int totalMoved = moved;
                       runOnUiThread(() -> {
-                          panicStatusText.setText("HIDDEN " + totalMoved + " FILES (Gone from Files app & Gallery)!");
-                          Toast.makeText(this, totalMoved + " files hidden completely!", Toast.LENGTH_LONG).show();
+                          panicStatusText.setText("HIDDEN " + totalMoved + " ACTIVE GALLERY FILES!");
+                          Toast.makeText(this, totalMoved + " active files hidden!", Toast.LENGTH_LONG).show();
                       });
                   }).start();
               }
 
               private void unhideAllMediaFiles() {
-                  panicStatusText.setText("Restoring files to original albums... Please wait.");
+                  panicStatusText.setText("Restoring active Gallery albums... Please wait.");
                   new Thread(() -> {
                       File bulkVault = getBulkVault();
                       File mapFile = new File(bulkVault, "map.txt");
@@ -339,6 +343,7 @@ jobs:
                                       String origPath = line.substring(sep + 3);
                                       File lockedFile = new File(bulkVault, lockName);
                                       if (lockedFile.exists()) {
+                                          // Double check not to restore into any dot/trash path
                                           if (origPath.contains("/.") || origPath.toLowerCase().contains("trash") || origPath.toLowerCase().contains("thumb")) {
                                               lockedFile.delete();
                                               continue;
@@ -364,7 +369,7 @@ jobs:
 
                       final int totalRestored = restored;
                       runOnUiThread(() -> {
-                          panicStatusText.setText("RESTORED " + totalRestored + " FILES TO ALBUMS!");
+                          panicStatusText.setText("RESTORED " + totalRestored + " GALLERY FILES!");
                           Toast.makeText(this, totalRestored + " files restored!", Toast.LENGTH_LONG).show();
                       });
                   }).start();
@@ -485,4 +490,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Calculator-Vault-APK
-          path: app/build/outputs/apk/debug/app-
+          path: app/build/outputs/apk/debug/app-debug.apk
